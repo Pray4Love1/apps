@@ -1,0 +1,32 @@
+name: Chain endpoints
+
+on:
+  schedule:
+    # once daily (early morning, 02:50 GMT)
+    - cron: '50 2 * * *'
+
+jobs:
+  endpoints:
+    if: ${{ github.repository == 'polkadot-js/apps' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install Dependencies
+        run: yarn install --immutable
+
+      - name: Run chain endpoints check
+        run: yarn ci:chainEndpoints
+
+      - name: Issue report if failure
+        if: ${{ failure() }}
+        uses: JasonEtco/create-an-issue@e27dddc79c92bc6e4562f268fffa5ed752639abd
+        with:
+          filename: .github/chain-endpoints.md
+          update_existing: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT_BOT }}
