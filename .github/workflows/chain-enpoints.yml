@@ -2,28 +2,73 @@ name: Chain endpoints
 
 on:
   schedule:
-    # once daily (early morning, 02:50 GMT)
+    # once daily (02:50 UTC)
     - cron: '50 2 * * *'
+  workflow_dispatch: {}
 
 jobs:
   endpoints:
-    if: ${{ github.repository == 'polkadot-js/apps' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    # Prevents accidental execution on forks unless explicitly allowed
+    if: >
+      github.repository == 'polkadot-js/apps' ||
+      startsWith(github.repository_owner, 'Pray4Love')
 
-      - uses: actions/setup-node@v4
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      # ─────────────────────────────────────────────
+      # Checkout
+      # ─────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ─────────────────────────────────────────────
+      # Node setup
+      # ─────────────────────────────────────────────
+      - name: Setup Node.js (LTS)
+        uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
+          cache: 'yarn'
 
-      - name: Install Dependencies
-        run: yarn install --immutable
+      # ─────────────────────────────────────────────
+      # Dependency integrity
+      # ─────────────────────────────────────────────
+      - name: Install dependencies (immutable)
+        run: |
+          corepack enable
+          yarn install --immutable
 
+      # ─────────────────────────────────────────────
+      # Chain endpoint validation
+      # ─────────────────────────────────────────────
       - name: Run chain endpoints check
-        run: yarn ci:chainEndpoints
+        run: |
+          yarn ci:chainEndpoints
 
-      - name: Issue report if failure
-        if: ${{ failure() }}
+      # ─────────────────────────────────────────────
+      # Artifact capture (always)
+      # ─────────────────────────────────────────────
+      - name: Upload endpoint logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chain-endpoint-logs
+          path: |
+            ./packages/**/endpoint*
+            ./logs/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # ─────────────────────────────────────────────
+      # Automated issue creation on failure
+      # ─────────────────────────────────────────────
+      - name: Open or update issue on failure
+        if: failure()
         uses: JasonEtco/create-an-issue@e27dddc79c92bc6e4562f268fffa5ed752639abd
         with:
           filename: .github/chain-endpoints.md
